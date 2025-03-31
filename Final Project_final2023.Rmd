@@ -1,0 +1,745 @@
+---
+title: "ID271 Final - Spring 2023"
+author: "Erin O'Dwyer, Shivani Parikh, Lethukuthula Nkambule, Cheryl Gu"
+date: "March 10, 2023"
+output: 
+  html_document:
+    toc_float: true
+    toc: true
+---
+
+Write-Up
+---------------
+
+# 1. Statistical Methods
+### 1.1 General model
+To study the associations of same-day temperature and black carbon (BC) exposure with systolic blood pressure (SBP), we used generalized additive mixed models. Treating SBP as the outcome, the following general equation was used:
+$$
+log(Y_{it}) = \beta_0 + u_i + \beta_1X_{1it} + ... + \beta_kX_{kit} + \beta_{TEMP}TEMP_{it} + \beta_{BC}BC_{it} + \epsilon_{it}
+$$
+where for participant *i* at visit **t*: $log(Y_{it})$ is the log-transformed SBP; $TEMP_{it}$ and $BC_{it}$ are same-day temperature and black carbon exposure; and $X_{kit}$ is covariate *k*. To account for the highly-correlated nature of repeat measurements, we included a random intercept term, ui, for each participant. We log-transformed SBP to ensure that our outcome was normally distributed. We then assessed whether same-day ambient temperature (TEMPC24H), BC levels (BC24H), or relative humidity (RHUM24H) had non-linear relationships with SBP using penalized splines. All models explored were fitted using the *gamm* function with a gaussian family since the outcome was continuous and normally distributed. Based on previous studies ((Auchincloss et al., 2008; Dvonch et al., 2009; Fuks et al., 2011; Rabito et al., 2020), we included  the following precision variables due to their demonstrable relationships  with SBP: age, race, daily alcohol intake, body mass index, cigarette smoking status, fasting blood glucose, years of education, statin medication status, physician-diagnosed diabetes mellitus, and coronary heart disease.
+
+
+### 1.2 Effect modification
+Various effect modifiers were explored in our analysis. Firstly, we looked at whether diabetes modifies the effect of same-day BC exposure on SBP by including an interaction term between diabetes and same-day BC in one of the models, and included variables for ambient same-day temperature, sine and cosine functions of date (proxy for seasonality), and day of the week. Secondly, separate models with an interaction term between season and same-day BC/temperature were fit to test whether the associations between BC/temperature and SBP varied by warm and cold seasons. Lastly, to investigate if there were any subgroups that were particularly vulnerable to the effect of same-day BC or temperature on SBP, we included an interaction term between same-day BC or temperature and each of the following covariates as they’ve been shown (Gosmanova et al., 2016; Lv et al., 2018; Omvik, 1996; Santana et al., 2018; Strazzullo et al., 2007) to have a relationship with SBP: smoking status, fasting blood glucose, statin medication use, alcohol consumption, and coronary heart disease status. Race an effect modifier was excluded as we believed there were not enough subjects in each racial category to find any significant results. 
+
+
+### 1.3 Lagged effects
+To investigate if the associations between BC/temperature and SBP persisted for more than one day, we fit distributed lag models using the *gam* function from the **mgvc* package. We included three lag days for each exposure (BC or temperature) — same-day and one for each of the prior two days. As in our other models, we adjusted for relative humidity, seasonality using sine and cosine functions of date, and day of the week. Overall effects of each exposure were derived from the sum of effects across lags. 
+
+
+# 2. Results
+The characteristics of our study sample are displayed in Table 1. Participants in the study tended to be older with an average age across participants and visits of 73 years. The overwhelming majority of the study population was white (98%), followed by small percentages of Black and Hispanic participants. The median educational attainment of 14 years indicates the majority had obtained some college-level education. Average systolic blood pressure (SBP) among participants and across visits was 131 mmHg and average BMI was in the overweight category (>25). Most participants did not smoke; 30% were never smokers while 66% were former, but not current, smokers. Most participants did not consume more than two alcoholic beverages per day and had fasting blood glucose levels below 110 mg/dL at visits. Overall, 39% reported taking statin medications across visits and the average prevalence of diabetes and coronary heart disease during the study was 31% and 14%, respectively. 
+
+Effect estimates from both our crude and adjusted models can be found in Table 2. All associations of the outcome with meteorological variables were estimated to be linear with 1 df. The dose-response relationships between same-day temperature and BC on SBP are depicted in Figures 1 and 2, respectively. 
+
+We found a significant, linear relationship between short-term BC exposure on systolic blood pressure in both our crude (meteorological variables only) and adjusted models. Including confounders and a priori-specified covariates in our adjusted model did not greatly change our effect estimates and, in both models, we estimate that an increase of approximately 1 µg/m3 in short-term exposure to BC increases systolic blood pressure by approximately 1 mmHg. While an increase of 1 mmHg in systolic blood pressure might seem small, when short-term exposure to black carbon pollution is multi-fold higher (i.e., in high-traffic, densely-populated areas), there might be a much greater elevation in systolic blood pressure that does result in clinically-relevant effects. We did not find an overall significant effect of same-day temperature on systolic blood pressure. 
+
+We investigated a variety of potential interactions that might explain effect heterogeneity in the associations of same-day temperature and BC on SBP and considered an interaction significant if the p-value was < .05. Effects of significant interactions on the temperature-SBP and BC-SBP associations are displayed in Tables 3 and 4, respectively. We did not find evidence of effect modification by smoking status, fasting blood glucose, diabetes, statin use, or warm/cold season. There was evidence for effect modification of the temperature-SBP relationship by CHD and for the BC-SBP relationship by CHD and alcohol consumption. 
+
+Finally, we found significant lag effects of BC on SBP that monotonically decreased from same-day to two-day-prior exposure (i.e., more proximal exposure exhibited greater effect). The effect estimates from our distributed lag model are shown in Table 5. The summed effect across three lag days was 1.027 (95% CI: 1.010 - 1.045). We did not find evidence of lagged effects for temperature on systolic blood pressure. 
+
+
+# 3. Conclusion
+Same-day exposure to BC is associated with significant increases in SBP in this study population, comprised primarily of older, white males, though the clinical relevance of this finding may be dependent on the actual levels of this pollutant. As evidenced by our study results, there also appears to be lagged effects of exposure to BC. However, same-day temperature was found to be not significantly associated with SBP in our overall study population and no lagged effects were observed. CHD modified the effect of same-day temperature on SBP while CHD and alcohol consumption modified the BC-SBP association.
+
+
+##############################################################################
+## Setup
+##############################################################################
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+##############################################################################
+## Load packages
+##############################################################################
+
+```{r loadlib, echo=T, results='hide', message=F, warning=F}
+library(lubridate)
+library(tidyverse)
+library(foreign)
+library(stats)
+library(mgcv)
+library(splines)
+library(ggplot2)
+library(ggeffects)
+library(AER)
+library(knitr)
+library(broom)
+library(MASS)
+library(flextable)
+library(table1)
+library(expss)
+library(gplots)
+library(mgcv)
+```
+
+
+
+##############################################################################
+## Set up working directory
+##############################################################################
+
+```{r}
+getwd()
+setwd("/Users/erinodwyer/Documents/ID271/Final") 
+```
+
+
+
+##############################################################################
+## Load data
+##############################################################################
+
+```{r}
+nas_bp <- readRDS("/Users/erinodwyer/Documents/ID271/Final/nas_bp.rds") #load data
+nas_bp <- na.omit(nas_bp) #delete all the missing from a data set
+dim(nas_bp) #dimension of data as rows and columns
+
+nas_bp <- nas_bp %>%
+  mutate(DIABETE=factor(DIABETE), 
+         RACE=factor(RACE),
+         SMK=factor(SMK),
+         FBG=factor(FBG),
+         TWODRINK = factor(TWODRINK),
+         STATIN=factor(STATIN),
+         CHD=factor(CHD))
+summary(nas_bp)
+#for effect heterogeneity - do not use factor() in model 
+#because now this is already doing it for you
+```
+
+
+
+##############################################################################
+## Exploratory
+##############################################################################
+
+```{r}
+str(nas_bp) #look at df
+summary(nas_bp) #descriptives
+
+## Exposures
+plot(nas_bp$TEMPC24H)
+plot(nas_bp$BC24H)
+# look as expected
+
+## Outcomes
+ggplot(nas_bp, aes(x=SBP)) + geom_histogram() + theme_classic() 
+# our outcome does not look normally distributed with slight tail on right
+ggplot(nas_bp, aes(x=log(SBP))) + geom_histogram() + theme_classic() 
+# our outcome now looks normally distributed
+
+## Exposure-outcome relationships
+ggplot(nas_bp, aes(x=TEMPC24H, y=SBP)) + geom_point() + theme_classic()
+ggplot(nas_bp, aes(x=BC24H, y=SBP)) + geom_point() + theme_classic() 
+
+```
+
+
+
+```{r}
+
+##############################################################################
+## CREATE TABLE 1
+##############################################################################
+
+
+label(nas_bp$SBP) <- "Systolic Blood Pressure (mmHg)"
+label(nas_bp$AGE) <- "Age (y)"
+
+nas_bp$RACE <- factor(nas_bp$RACE, levels = c(1, 2,3,4, 5), labels = c("White", "Black", "Hispanic White", "Hispanic Black", "American Indian"))
+label(nas_bp$RACE) <- "Race"
+
+label(nas_bp$NEDUC) <- "Education (y)"
+label(nas_bp$BMI) <- "Body Mass Index (kg/m2)"
+
+nas_bp$SMK <- factor(nas_bp$SMK, levels = c(1, 3, 4), labels = c("Never", "Current", "Former"))
+label(nas_bp$SMK) <- "Smoking Status"
+
+nas_bp$TWODRINK <- factor(nas_bp$TWODRINK, levels = c(0, 1), labels = c("Less than 2 drinks/day", "Two or more drinks/day"))
+label(nas_bp$TWODRINK) <- "Alcohol Consumption"
+
+nas_bp$FBG <- factor(nas_bp$FBG, levels = c(1, 2, 3), labels = c("<110 mg/dL", ">110 & <126 mg/dL", ">126 mg/dL"))
+label(nas_bp$FBG) <- "Fasting Blood Glucose"
+
+nas_bp$STATIN <- factor(nas_bp$STATIN, levels = c(0,1), labels = c("no", "yes"))
+label(nas_bp$STATIN) <- "Statin Use"
+
+nas_bp$CHD <- factor(nas_bp$CHD, levels = c(0,1), labels = c("no", "yes"))
+label(nas_bp$CHD) <- "Coronary Heart Disease"
+
+nas_bp$DIABETE <- factor(nas_bp$DIABETE, levels = c(0,1), labels = c("no", "yes"))
+label(nas_bp$DIABETE) <- "Diabetes"
+
+#examining how many participants at each visit
+nas_bp %>% count(VISIT)
+#appears that study population grew over time (perhaps rolling enrollment, so going to report Table1 as overall...)
+
+Table1 <-table1(~SBP + AGE + RACE + NEDUC + BMI + SMK + TWODRINK + FBG + STATIN + CHD + DIABETE, data=nas_bp)
+print(Table1)
+
+Table1_long<- Table1 <-table1(~SBP + AGE + RACE + NEDUC + BMI + SMK + TWODRINK + FBG + STATIN + CHD + DIABETE | VISIT, data=nas_bp )
+```
+
+##############################################################################
+## Model for same-day BC and TEMP
+##############################################################################
+
+
+
+
+```{r}
+
+##############################################################################
+## MANIPULATE VARIABLES
+##############################################################################n
+
+nas_bp <- nas_bp %>%
+mutate(log_SBP = log(SBP))
+
+##############################################################################
+## TEST OUT VARIABLES
+##############################################################################
+
+## unless we're looking at modification, we are only using variables
+## that could confound the relationship between BC-SBP and BC-TEMP
+## ie ones that are upstream of and related to BOTH exposure AND outcome
+## in this case, we are really only interested in meteorological variables
+
+## Testing continuous variables for non-linearity
+mod_test_nonlin <- gamm(log(SBP) ~ 
+               s(TEMPC24H,bs='cr',fx=F) + s(BC24H,bs='cr',fx=F) +
+               s(RHUM24H,bs='cr',fx=F) + SINETIME + COSTIME + as.factor(WKDAY),
+               #edf=1 for all penalized splines - treat as linear!
+             na.action=na.omit, 
+             random=list(ID=~1), 
+             family=gaussian(), 
+             data=nas_bp); 
+summary(mod_test_nonlin)
+summary(mod_test_nonlin$lme)$tTable #getting fixed effects coefficients
+summary(mod_test_nonlin$gam) #getting smooth coefficients
+
+
+
+## Testing whether association between SBP and T vary by warm and cold seasons
+mod_test_wc <- gamm(log_SBP ~ 
+               TEMPC24H*WARMCOLD + BC24H + 
+                 #p=0.6>0.05 - no significant interaction!
+               RHUM24H + SINETIME + COSTIME + as.factor(WKDAY),
+             na.action=na.omit, 
+             random=list(ID=~1), 
+             family=gaussian(), 
+             data=nas_bp); 
+summary(mod_test_wc)
+summary(mod_test_wc$lme)$tTable
+
+
+##
+#Testing whether association between SBP and and BC vary by warm and cold seasons
+mod_test_wcbc <- gamm(log_SBP ~ 
+               TEMPC24H + BC24H*WARMCOLD + 
+                 #p=0.4>0.05 - no significant interaction!
+               RHUM24H + SINETIME + COSTIME + as.factor(WKDAY),
+             na.action=na.omit, 
+             random=list(ID=~1), 
+             family=gaussian(), 
+             data=nas_bp); 
+summary(mod_test_wcbc)
+summary(mod_test_wcbc$lme)$tTable
+
+## Testing whether diabetes modifies the association between SBP and BC
+mod_test_diabete <- gamm(log_SBP ~ 
+               TEMPC24H + BC24H*DIABETE +
+                 #p=0.38>0.05 - no significant interaction - no modification!
+               RHUM24H + SINETIME + COSTIME + as.factor(WKDAY), 
+             na.action=na.omit, 
+             random=list(ID=~1), 
+             family=gaussian(), 
+             data=nas_bp);
+summary(mod_test_diabete)
+summary(mod_test_diabete$lme)$tTable
+
+
+
+##############################################################################
+## Build model 1 - only meteorological data
+##############################################################################
+
+
+mod1 <- gamm(log_SBP ~ 
+               #log transformed to ensure outcome is normally distributed
+               TEMPC24H + BC24H + 
+               #exposures!
+               RHUM24H + SINETIME + COSTIME + as.factor(WKDAY), 
+             #meteorological variables, seasonality, time (don't need to add
+             #additional time variables because it's taken care of with 
+             #SINETIME+COSTIME+WKDAY)
+             na.action=na.omit, 
+             #ensure all NA's are removed
+             random=list(ID=~1), 
+             #treat ID as random intercept to control for  
+             #highly-correlated nature of repeat measurements within subjects
+             family=gaussian(), 
+             #we have normally distributed continuous data 
+             data=nas_bp);
+summary(mod1)
+summary(mod1$lme)$tTable 
+summary(mod1$gam)
+
+
+
+##############################################################################
+## Plot model 1 - only meteorological data
+##############################################################################
+
+#assess residuals
+plot(resid(mod1$lme)) #looking good!
+plot(mod1$lme) #basic plots
+
+#dose-response plots
+mod1_pred_TEMPC24H <- ggpredict(mod1$gam, terms="TEMPC24H")
+
+mod1_pred_BC24H <- ggpredict(mod1$gam, terms="BC24H")
+
+ggplot(mod1_pred_TEMPC24H, aes(x=x, y=predicted)) + 
+  geom_line(color="black") +
+  geom_ribbon(aes(ymin=conf.low, ymax=conf.high), color="grey", alpha=0.05) +
+  theme_classic() + 
+  ggtitle("Dose-Response Curve for Same-Day Temp and log(SBP)") +
+  xlab("Same-Day Temp (C)") + ylab("log(SBP) (mmHg)")
+##Blood pressure generally is higher in the winter and lower in the summer. Winter - low temperatures cause blood vessels to temporarily narrow - increases blood pressure because more pressure is needed to force blood through narrowed veins and arteries. Vise-versa for the summer (you'd expect to see vasodilation)!
+
+
+ggplot(mod1_pred_BC24H, aes(x=x, y=predicted)) + 
+  geom_line(color="black") +
+  geom_ribbon(aes(ymin=conf.low, ymax=conf.high), color="grey", alpha=0.05) +
+  theme_classic() + ggtitle("Dose-Response Curve for BC and log(SBP)") +
+  xlab("Same-Day BC (ug/m3)") + ylab("log(SBP) (mmHg)")
+##Blood pressure higher with higher levels of BC
+
+
+
+##############################################################################
+## Compute effect estimates for model 1 - only meteorological data
+##############################################################################
+
+intervals(mod1$lme)
+
+beta_TEMPC24H <- mod1$lme$coef$fixed[2]
+beta_TEMPC24H
+exp(beta_TEMPC24H) #est temp
+
+se_TEMPC24H <- sqrt(mod1$lme$varFix[2,2])
+#constructing 95%CI for temp: 
+lcl_TEMPC24H <- (beta_TEMPC24H-(1.96*se_TEMPC24H))
+exp(lcl_TEMPC24H)
+ucl_TEMPC24H <- (beta_TEMPC24H+(1.96*se_TEMPC24H))
+exp(ucl_TEMPC24H)
+
+
+beta_BC24H <- mod1$lme$coef$fixed[3]
+exp(beta_BC24H) #est bc
+
+se_BC24H <- sqrt(mod1$lme$varFix[3,3])
+#constructing 95% CI for BC:
+
+lcl_BC24H <- (beta_BC24H-(1.96*se_BC24H))
+exp(lcl_BC24H)
+ucl_BC24H <- (beta_BC24H+(1.96*se_BC24H))
+exp(ucl_BC24H)
+
+```
+
+
+
+```{r}
+##############################################################################
+## Build model 2 - including precision covariates
+##############################################################################
+
+mod2 <- gamm(log_SBP ~ 
+               TEMPC24H + BC24H + 
+               RHUM24H + SINETIME + COSTIME + as.factor(WKDAY) + 
+               AGE + RACE + TWODRINK + BMI + SMK + FBG + NEDUC + STATIN + DIABETE + CHD,
+             na.action=na.omit,
+             random=list(ID=~1),
+             family=gaussian(), 
+             data=nas_bp);
+summary(mod2)
+summary(mod2$lme)$tTable 
+summary(mod2$gam)
+
+
+
+##############################################################################
+## Plot model 2 - including precision covariates
+##############################################################################
+
+#assess residuals
+plot(resid(mod2$lme)) 
+plot(mod2$lme) 
+
+#dose-response plots
+mod2_pred_TEMPC24H <- ggpredict(mod2$gam, terms="TEMPC24H")
+
+mod2_pred_BC24H <- ggpredict(mod2$gam, terms="BC24H")
+
+ggplot(mod2_pred_TEMPC24H, aes(x=x, y=predicted)) + 
+  geom_line(color="black") +
+  geom_ribbon(aes(ymin=conf.low, ymax=conf.high), color="grey", alpha=0.05) +
+  theme_classic() + 
+  ggtitle("Dose-Response Curve for Same-Day Temp and log(SBP)") +
+  xlab("Same-Day Temp (C)") + ylab("log(SBP) (mmHg)")
+##Blood pressure generally is higher in the winter and lower in the summer. Winter - low temperatures cause blood vessels to temporarily narrow - increases blood pressure because more pressure is needed to force blood through narrowed veins and arteries. Vise-versa for the summer (you'd expect to see vasodilation)!
+
+
+ggplot(mod2_pred_BC24H, aes(x=x, y=predicted)) + 
+  geom_line(color="black") +
+  geom_ribbon(aes(ymin=conf.low, ymax=conf.high), color="grey", alpha=0.05) +
+  theme_classic() + ggtitle("Dose-Response Curve for BC and log(SBP)") +
+  xlab("Same-Day BC (ug/m3)") + ylab("log(SBP) (mmHg)")
+##Blood pressure higher with higher levels of BC
+
+
+
+##############################################################################
+## Compute effect estimates for model 2 - including precision covariates
+##############################################################################
+
+intervals(mod2$lme)
+
+beta_TEMPC24H_mod2 <- mod2$lme$coef$fixed[2]
+exp(beta_TEMPC24H_mod2) #estimated effect of daily temp on blood pressure
+se_TEMPC24H_mod2 <- sqrt(mod2$lme$varFix[2,2])
+
+#constructing TEMP 95%CI
+lcl_TEMPC24H_mod2 <- (beta_TEMPC24H_mod2-(1.96*se_TEMPC24H_mod2))
+exp(lcl_TEMPC24H_mod2)
+ucl_TEMPC24H_mod2 <- (beta_TEMPC24H_mod2+(1.96*se_TEMPC24H_mod2))
+exp(ucl_TEMPC24H_mod2)
+
+
+beta_BC24H_mod2 <- mod2$lme$coef$fixed[3]; 
+exp(beta_BC24H_mod2) #est bc effect
+
+se_BC24H_mod2 <- sqrt(mod2$lme$varFix[3,3])
+#constructing BC 95%CI
+lcl_BC24H_mod2 <- (beta_BC24H_mod2-(1.96*se_BC24H_mod2))
+exp(lcl_BC24H_mod2)
+
+ucl_BC24H_mod2 <- (beta_BC24H_mod2+(1.96*se_BC24H_mod2)); 
+exp(ucl_BC24H_mod2)
+
+```
+
+##Effect Modification Section
+
+
+```{r}
+##############################################################################
+## Testing Effect Modification
+##############################################################################
+
+ID<-unique(nas_bp$ID)
+
+#smoking (no significant EM)
+mod_emBC_smk <- gamm(log_SBP ~ TEMPC24H + BC24H + 
+               RHUM24H + SINETIME + COSTIME + as.factor(WKDAY) + 
+              AGE + RACE + TWODRINK + BMI + SMK + FBG + NEDUC + STATIN + DIABETE + CHD 
+              + BC24H*SMK,
+             na.action=na.omit,
+             random=list(ID=~1),
+             family=gaussian(), 
+             data=nas_bp)
+
+summary(mod_emBC_smk$gam)
+
+# BC24H:SMK3 p=0.83
+# BC24H:SMK4  p=0.87
+
+mod_emTemp_smk <- gamm(log_SBP ~ TEMPC24H + BC24H + 
+               RHUM24H + SINETIME + COSTIME + as.factor(WKDAY) + 
+              AGE + RACE + TWODRINK + BMI + SMK + FBG + NEDUC + STATIN + DIABETE + CHD 
+              + TEMPC24H*SMK,
+             na.action=na.omit,
+             random=list(ID=~1),
+             family=gaussian(), 
+             data=nas_bp)
+
+summary(mod_emTemp_smk$gam)
+
+# TEMPC24H:SMK3   p=0.611672    
+# TEMPC24H:SMK4   p=0.464508   
+
+# fast blood glucose (no significant EM)
+mod_emBC_fbg <- gamm(log_SBP ~ TEMPC24H + BC24H + 
+               RHUM24H + SINETIME + COSTIME + as.factor(WKDAY) + 
+              AGE + RACE + TWODRINK + BMI + SMK + FBG + NEDUC + STATIN + DIABETE + CHD 
+              + BC24H*FBG,
+             na.action=na.omit,
+             random=list(ID=~1),
+             family=gaussian(), 
+             data=nas_bp)
+summary(mod_emBC_fbg$gam)
+#BC24H:FBG2  p=0.763825    
+#BC24H:FBG3  p=0.696766  
+
+mod_emTemp_fbg <- gamm(log_SBP ~ TEMPC24H + BC24H + 
+               RHUM24H + SINETIME + COSTIME + as.factor(WKDAY) + 
+              AGE + RACE + TWODRINK + BMI + SMK + FBG + NEDUC + STATIN + DIABETE + CHD 
+              + TEMPC24H*FBG,
+             na.action=na.omit,
+             random=list(ID=~1),
+             family=gaussian(), 
+             data=nas_bp)
+summary(mod_emTemp_fbg$gam)
+#TEMPC24H:FBG2    p=0.656366    
+#TEMPC24H:FBG3    p=0.544757 
+
+#alcohol consumption (significant EM for BC, not temp)
+mod_emBC_alcohol <- gamm(log_SBP ~ TEMPC24H + BC24H + 
+               RHUM24H + SINETIME + COSTIME + as.factor(WKDAY) + 
+              AGE + RACE + TWODRINK + BMI + SMK + FBG + NEDUC + STATIN + DIABETE + CHD 
+              + BC24H*TWODRINK,
+             na.action=na.omit,
+             random=list(ID=~1),
+             family=gaussian(), 
+             data=nas_bp)
+summary(mod_emBC_alcohol$gam)
+summary(mod_emBC_alcohol$lme)$tTable
+
+#BC24H:TWODRINK: 0.0216504, p = 0.032757 *
+
+######creating effect estimates and confidence interval for alcohol EM####
+#extracting effect estimate and SE for low alcohol: 
+beta_emBC_alcohol_low <- mod_emBC_alcohol$lme$coef$fixed[3]
+exp(beta_emBC_alcohol_low) #estimated effect of daily BC on blood pressure in EM model
+
+
+#extracting effect estimate & SE for interaction term of >2 drinks/day
+beta_emBC_alcohol_EM <- mod_emBC_alcohol$lme$coef$fixed[24]
+
+
+#putting it all together: 
+effect_estBC_alcohol_high <- beta_emBC_alcohol_low + beta_emBC_alcohol_EM
+exp(effect_estBC_alcohol_high)
+
+
+mod_emTemp_alcohol <- gamm(log_SBP ~ TEMPC24H + BC24H + 
+               RHUM24H + SINETIME + COSTIME + as.factor(WKDAY) + 
+              AGE + RACE + TWODRINK + BMI + SMK + FBG + NEDUC + STATIN + DIABETE + CHD 
+              + TEMPC24H*TWODRINK,
+             na.action=na.omit,
+             random=list(ID=~1),
+             family=gaussian(), 
+             data=nas_bp)
+summary(mod_emTemp_alcohol$gam)
+
+#TEMP24H:TWODRINK: p = .088334
+
+
+
+
+
+# statin (no significant EM)
+mod_emBC_statin <- gamm(log_SBP ~ TEMPC24H + BC24H + 
+               RHUM24H + SINETIME + COSTIME + as.factor(WKDAY) + 
+              AGE + RACE + TWODRINK + BMI + SMK + FBG + NEDUC + STATIN + DIABETE + CHD 
+              + BC24H*STATIN,
+             na.action=na.omit,
+             random=list(ID=~1),
+             family=gaussian(), 
+             data=nas_bp)
+summary(mod_emBC_statin$gam)
+#BC24H:STATIN1 p=0.127411 
+
+
+mod_emTemp_statin <- gamm(log_SBP ~ TEMPC24H + BC24H + 
+               RHUM24H + SINETIME + COSTIME + as.factor(WKDAY) + 
+              AGE + RACE + TWODRINK + BMI + SMK + FBG + NEDUC + STATIN + DIABETE + CHD 
+              + TEMPC24H*STATIN,
+             na.action=na.omit,
+             random=list(ID=~1),
+             family=gaussian(), 
+             data=nas_bp)
+summary(mod_emTemp_statin$gam)
+# TEMPC24H:STATIN1  p=0.234873   
+
+# CHD (significant EM)
+mod_emBC_chd <- gamm(log_SBP ~ TEMPC24H + BC24H + 
+               RHUM24H + SINETIME + COSTIME + as.factor(WKDAY) + 
+              AGE + RACE + TWODRINK + BMI + SMK + FBG + NEDUC + STATIN + DIABETE + CHD 
+              + BC24H*CHD,
+             na.action=na.omit,
+             random=list(ID=~1),
+             family=gaussian(), 
+             data=nas_bp)
+summary(mod_emBC_chd$gam)
+#BC24H:CHD1 p=0.010042 *  
+
+#extracting effect estimates
+beta_emBC_chd_none <- mod_emBC_chd$lme$coef$fixed[3]
+exp(beta_emBC_chd_none) 
+
+
+#extracting effect estimate & SE for interaction term of >2 drinks/day
+beta_emBC_chd_EM <- mod_emBC_chd$lme$coef$fixed[24]
+
+
+#putting it all together: 
+effect_estBC_chd <- beta_emBC_chd_none + beta_emBC_chd_EM
+exp(effect_estBC_chd)
+
+
+
+mod_emTemp_chd <- gamm(log_SBP ~ TEMPC24H + BC24H + 
+               RHUM24H + SINETIME + COSTIME + as.factor(WKDAY) + 
+              AGE + RACE + TWODRINK + BMI + SMK + FBG + NEDUC + STATIN + DIABETE + CHD 
+              + TEMPC24H*CHD,
+             na.action=na.omit,
+             random=list(ID=~1),
+             family=gaussian(), 
+             data=nas_bp)
+summary(mod_emTemp_chd$gam)
+#TEMPC24H:CHD1  p=0.00325 ** 
+
+
+#extracting effect estimates
+beta_emTemp_chd_none <- mod_emTemp_chd$lme$coef$fixed[2]
+exp(beta_emTemp_chd_none) 
+
+
+#extracting effect estimate & SE for interaction term of >2 drinks/day
+beta_emTemp_chd_EM <- mod_emTemp_chd$lme$coef$fixed[24]
+
+
+#putting it all together: 
+effect_estTemp_chd <- beta_emTemp_chd_none + beta_emTemp_chd_EM
+exp(effect_estTemp_chd)
+
+##Checking remaining temperature EM by warm/cold and diabetes
+
+mod_emTemp_diabetes <- gamm(log_SBP ~ TEMPC24H + BC24H + 
+               RHUM24H + SINETIME + COSTIME + as.factor(WKDAY) + 
+              AGE + RACE + TWODRINK + BMI + SMK + FBG + NEDUC + STATIN + DIABETE + CHD 
+              + TEMPC24H*DIABETE,
+             na.action=na.omit,
+             random=list(ID=~1),
+             family=gaussian(), 
+             data=nas_bp)
+summary(mod_emTemp_diabetes$gam)
+
+#TEMP24H:DIABETE: p=.93
+
+
+
+## only CHD and alcohol consumption show statistical significance for EM for BC exposure, CHD subgroups are vulnerable to the effect of same-day BC and temperature exposure on SBP.
+
+```
+
+
+
+
+```{r}
+##############################################################################
+## Lagged effects model _ TEMPERATURE 
+##############################################################################
+
+mod_lag_TEMP <- gam(log_SBP ~ TEMPC24H + BC24H + RHUM24H + SINETIME + COSTIME + as.factor(WKDAY) + TMPCD1+TMPCD2,
+           data=nas_bp, method="REML", family =gaussian(), na.action=na.omit)
+
+summary(mod_lag_TEMP)
+
+
+
+
+##############################################################################
+# EFFECT ESTIMATES FOR EACH lAG (TEMP)
+##############################################################################  
+lag0_est_TEMP <- exp(mod_lag_TEMP$coefficients[2]) #same-day effect estimate 
+lag1_est_TEMP <- exp(mod_lag_TEMP$coefficients[10]) #effect estimate from 1 day prior
+lag2_est_TEMP <- exp(mod_lag_TEMP$coefficients[11]) #effect estimate from 2 days prior (checked against coefficients in summary!)
+
+#extracting SE's
+lag0_se_TEMP <- sqrt(mod_lag_TEMP$Vp[2,2])
+lag1_se_TEMP <- sqrt(mod_lag_TEMP$Vp[10,10]) 
+lag2_se_TEMP <- sqrt(mod_lag_TEMP$Vp[11,11]) 
+
+
+#CI's
+lag0_CI_TEMP <- c(exp(mod_lag_TEMP$coefficients[2]+1.96*lag0_se_TEMP), exp(mod_lag_TEMP$coefficients[2]-1.96*lag1_se_TEMP))
+
+lag1_CI_TEMP <- c(exp(mod_lag_TEMP$coefficients[10]+1.96*lag1_se_TEMP), exp(mod_lag_TEMP$coefficients[10]-1.96*lag1_se_TEMP))
+
+lag2_CI_TEMP <- c(exp(mod_lag_TEMP$coefficients[11]+1.96*lag2_se_TEMP), exp(mod_lag_TEMP$coefficients[11]-1.96*lag2_se_TEMP))
+
+
+##############################################################################
+# EFFECT ESTIMATE FOR SUMMED LAGS (TEMP)
+##############################################################################
+
+#Sum of effect estimates
+lag_sum_TEMP <- mod_lag_TEMP$coefficients[2]+mod_lag_TEMP$coefficients[10]+mod_lag_TEMP$coefficients[11]
+exp(lag_sum_TEMP) # exponentiated beta
+lag_se_sum_TEMP <- sqrt(sum(mod_lag_TEMP$Vp[2,2],mod_lag_TEMP$Vp[10:11,10:11]))
+lag_lcl_sum_TEMP <- lag_sum_TEMP - 1.96*lag_se_sum_TEMP   
+lag_ucl_sum_TEMP <- lag_sum_TEMP + 1.96*lag_se_sum_TEMP   
+
+lag_sum_CI_exp_TEMP <- c(exp(lag_lcl_sum_TEMP), exp(lag_ucl_sum_TEMP)) 
+lag_sum_CI_exp_TEMP # exponentiated CI
+```
+
+
+```{r}
+##############################################################################
+## Lagged effects model _ Black Carbon
+##############################################################################
+
+mod_lag_BC <- gam(log_SBP ~ TEMPC24H + BC24H + RHUM24H + SINETIME + COSTIME + as.factor(WKDAY) + BCD1+BCD2,
+           data=nas_bp, method="REML", family =gaussian(), na.action=na.omit)
+
+summary(mod_lag_BC)
+
+
+
+
+##############################################################################
+# EFFECT ESTIMATES FOR EACH lAG (BC)
+##############################################################################  
+lag0_est_BC <- exp(mod_lag_BC$coefficients[3]) #same-day effect estimate 
+lag1_est_BC <- exp(mod_lag_BC$coefficients[10]) #effect estimate from 1 day prior
+lag2_est_BC <- exp(mod_lag_BC$coefficients[11]) #effect estimate from 2 days prior (checked against coefficients in summary!)
+
+#extracting SE's
+lag0_se_BC <- sqrt(mod_lag_BC$Vp[3,3])
+lag1_se_BC <- sqrt(mod_lag_BC$Vp[10,10]) 
+lag2_se_BC <- sqrt(mod_lag_BC$Vp[11,11]) 
+
+
+#CI's
+lag0_CI_BC <- c(exp(mod_lag_BC$coefficients[3]+1.96*lag0_se_BC), exp(mod_lag_BC$coefficients[2]-1.96*lag0_se_BC))
+
+lag1_CI_BC <- c(exp(mod_lag_BC$coefficients[10]+1.96*lag1_se_BC), exp(mod_lag_BC$coefficients[10]-1.96*lag1_se_BC))
+
+lag2_CI_BC <- c(exp(mod_lag_BC$coefficients[11]+1.96*lag2_se_BC), exp(mod_lag_BC$coefficients[11]-1.96*lag2_se_BC))
+
+
+##############################################################################
+# EFFECT ESTIMATE FOR SUMMED LAGS (TEMP)
+##############################################################################
+
+#Sum of effect estimates
+lag_sum_BC <- mod_lag_BC$coefficients[3]+mod_lag_BC$coefficients[10]+mod_lag_BC$coefficients[11]
+exp(lag_sum_BC) # exponentiated beta
+lag_se_sum_BC <- sqrt(sum(mod_lag_BC$Vp[3,3],mod_lag_BC$Vp[10:11,10:11]))
+lag_lcl_sum_BC <- lag_sum_BC - 1.96*lag_se_sum_BC   
+lag_ucl_sum_BC <- lag_sum_BC + 1.96*lag_se_sum_BC   
+
+lag_sum_CI_exp_BC <- c(exp(lag_lcl_sum_BC), exp(lag_ucl_sum_BC)) 
+lag_sum_CI_exp_BC # exponentiated CI
+```
